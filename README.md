@@ -4,9 +4,9 @@
 
 当前使用本地原生运行方案，不需要 Docker Desktop 或其他容器软件。AI 默认为确定性 mock：可以体验完整流程，但题目、评分和建议不是来自真实大模型，不能用来判断真实求职能力。
 
-## GitHub 私有仓库
+## GitHub 公开仓库
 
-仓库地址：[mingw0788/InterviewCopilot-AI](https://github.com/mingw0788/InterviewCopilot-AI)，需要登录获授权的 GitHub 账号查看。
+仓库地址：[mingw0788/InterviewCopilot-AI](https://github.com/mingw0788/InterviewCopilot-AI)，当前为公开仓库，无需仓库授权即可查看源码。
 
 发布采用当前版本快照，不包含含有本机演示令牌的早期提交；完整旧开发历史仍保存在本地 `main`。本机发布分支为 `codex/github-private-upload`，对应远程 `main`。私有配置、数据库数据、依赖和构建产物均不上传。
 

@@ -6,9 +6,9 @@ GitHub 发布分支：`codex/github-private-upload`（对应远程 `main`）
 
 本地历史基线：`d95e198 docs: prevent stale native backend artifact`
 
-本轮状态：项目可靠性与原生运行体验已完善并完成本机验证，按当前版本快照整理 GitHub 私有仓库交付。
+本轮状态：项目可靠性与原生运行体验已完善并完成本机验证，按当前版本快照完成 GitHub 公开仓库交付。
 
-目标仓库：[mingw0788/InterviewCopilot-AI](https://github.com/mingw0788/InterviewCopilot-AI)。仓库仅保存代码，不代表网站已在线部署。为避免上传旧文档中的本机演示令牌，早期开发历史仅保留在本地 `main`；下方历史 Commit 编号用于本地追溯，不属于远程快照历史。
+公开仓库：[mingw0788/InterviewCopilot-AI](https://github.com/mingw0788/InterviewCopilot-AI)。仓库仅保存代码，不代表网站已在线部署。为避免上传旧文档中的本机演示令牌，早期开发历史仅保留在本地 `main`；下方历史 Commit 编号用于本地追溯，不属于远程快照历史。
 
 ## 当前状态
 
