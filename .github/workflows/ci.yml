@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+      - name: Install contract dependencies
+        run: npm ci
+        working-directory: docs/openapi
+      - name: Validate OpenAPI contracts
+        run: npm test
+        working-directory: docs/openapi
+
+  business-service:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build and test Java service
+        run: mvn --batch-mode --no-transfer-progress verify
+        working-directory: business-service
+        env:
+          MIGRATION_TEST_RUN: 'true'
+          JWT_SIGNING_SECRET: ci-only-jwt-signing-key-with-32-bytes
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install Python service for integration test
+        run: python -m pip install ./ai-service
+      - name: Test Java against running Python service
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AI_PROVIDER=mock
+          export INTERNAL_AI_SERVICE_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          export AI_INTEGRATION_BASE_URL=http://127.0.0.1:8000
+
+          python -m uvicorn interviewcopilot_ai.main:app --host 127.0.0.1 --port 8000 >"$RUNNER_TEMP/ai-service.log" 2>&1 &
+          ai_pid=$!
+          trap 'kill "$ai_pid" 2>/dev/null || true' EXIT
+
+          ready=false
+          for attempt in {1..30}; do
+            if curl --fail --silent "$AI_INTEGRATION_BASE_URL/health/ready" >/dev/null; then
+              ready=true
+              break
+            fi
+            if ! kill -0 "$ai_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/ai-service.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != true ]]; then
+            cat "$RUNNER_TEMP/ai-service.log"
+            exit 1
+          fi
+
+          mvn --batch-mode --no-transfer-progress -f business-service/pom.xml '-Dtest=AiQuestionClientLiveIntegrationTests' test
+
+  ai-service:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install Python service and test dependencies
+        run: python -m pip install -e '.[test]'
+        working-directory: ai-service
+      - name: Test Python service
+        run: python -m pytest
+        working-directory: ai-service
+      - name: Build Python wheel
+        run: python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/ai-wheel" .
+        working-directory: ai-service
+
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Test frontend
+        run: npm test
+        working-directory: frontend
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+  secrets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan commits for secrets
+        shell: bash
+        env:
+          BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          scan_args=(git file:///workspace/ --branch "$HEAD_COMMIT")
+          if [[ -n "$BASE_COMMIT" && ! "$BASE_COMMIT" =~ ^0{40}$ ]]; then
+            scan_args+=(--since-commit "$BASE_COMMIT")
+          fi
+
+          # The passwordless JDBC test URL in history yields an "unknown" verification error.
+          # Keep verified and unverified findings blocking, including on a first push.
+          docker run --rm -v "$PWD:/workspace:ro" -w /workspace \
+            ghcr.io/trufflesecurity/trufflehog:3.97.9 \
+            "${scan_args[@]}" --fail --no-update --github-actions \
+            --results=verified,unverified --fail-on-scan-errors

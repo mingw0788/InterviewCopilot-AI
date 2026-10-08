@@ -1,0 +1,1697 @@
+openapi: 3.1.0
+info:
+  title: InterviewCopilot Business API
+  version: 1.0.0
+  description: >-
+    Browser-facing V1 contract owned by the Java business service. The Java
+    service is the sole business system of record and the only API called by
+    the frontend.
+servers:
+  - url: /api/v1
+    description: Version 1 business API
+tags:
+  - name: Authentication
+    description: Registration and access-token operations.
+  - name: Users
+    description: Operations for the authenticated user.
+  - name: Interviews
+    description: Interview lifecycle and history operations.
+  - name: Reports
+    description: Interview report query and retry operations.
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a user
+      description: >-
+        Creates a user whose trimmed login identifier is unique under a
+        case-insensitive comparison. The password is never returned.
+      operationId: registerUser
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in
+      description: >-
+        Authenticates a username-style login identifier. Authentication
+        failures do not disclose whether the user exists.
+      operationId: loginUser
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Get the current user
+      operationId: getCurrentUser
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+      responses:
+        '200':
+          description: Current user returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /interviews:
+    post:
+      tags: [Interviews]
+      summary: Create an interview
+      description: >-
+        Creates an interview in CREATED state. Replaying the same request with
+        the same idempotency key returns the original resource with HTTP 200.
+      operationId: createInterview
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInterviewRequest'
+      responses:
+        '200':
+          description: Original interview returned for an idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewResponse'
+        '201':
+          description: Interview created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      tags: [Interviews]
+      summary: List interview history
+      description: Returns only interviews owned by the authenticated user.
+      operationId: listInterviews
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/InterviewStatusQuery'
+      responses:
+        '200':
+          description: Interview page returned in reverse creation order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewPageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /interviews/{interviewId}:
+    parameters:
+      - $ref: '#/components/parameters/InterviewIdPath'
+    get:
+      tags: [Interviews]
+      summary: Get interview details
+      description: >-
+        The service must enforce ownership by matching both interviewId and
+        the authenticated user. Internal question-generation data is omitted.
+      operationId: getInterview
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+      responses:
+        '200':
+          description: Interview details returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /interviews/{interviewId}/start:
+    parameters:
+      - $ref: '#/components/parameters/InterviewIdPath'
+    post:
+      tags: [Interviews]
+      summary: Start an interview
+      description: >-
+        Moves a CREATED interview to IN_PROGRESS and obtains one first
+        question. A replay returns the existing question or resumes generation
+        when the state changed but no question was saved.
+      operationId: startInterview
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      responses:
+        '200':
+          description: Interview started or existing start result replayed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartInterviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+  /interviews/{interviewId}/current-question:
+    parameters:
+      - $ref: '#/components/parameters/InterviewIdPath'
+    get:
+      tags: [Interviews]
+      summary: Get the current question
+      description: >-
+        Returns the current public question. A completed interview returns
+        interview_status COMPLETED with a null question.
+      operationId: getCurrentQuestion
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+      responses:
+        '200':
+          description: Current question state returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentQuestionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /interviews/{interviewId}/answers:
+    parameters:
+      - $ref: '#/components/parameters/InterviewIdPath'
+    post:
+      tags: [Interviews]
+      summary: Submit the current answer
+      description: >-
+        Saves one immutable answer, evaluates it, and either obtains one next
+        question or completes the interview. A replay never creates a second
+        answer or evaluation.
+      operationId: submitAnswer
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitAnswerRequest'
+      responses:
+        '200':
+          description: Original result returned for an idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitAnswerResponse'
+        '201':
+          description: Answer accepted and processing completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitAnswerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+  /interviews/{interviewId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/InterviewIdPath'
+    post:
+      tags: [Interviews]
+      summary: Cancel an interview
+      description: Only CREATED or IN_PROGRESS interviews can be cancelled.
+      operationId: cancelInterview
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      responses:
+        '200':
+          description: Interview cancelled or cancellation result replayed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelInterviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /interviews/{interviewId}/report:
+    parameters:
+      - $ref: '#/components/parameters/InterviewIdPath'
+    get:
+      tags: [Reports]
+      summary: Get an interview report
+      description: >-
+        Once the interview is COMPLETED this operation always returns HTTP 200
+        with deterministic metrics. AI summary fields are null until the
+        report is AVAILABLE. Before completion it returns HTTP 409.
+      operationId: getInterviewReport
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+      responses:
+        '200':
+          description: Report state and deterministic metrics returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /interviews/{interviewId}/report/retry:
+    parameters:
+      - $ref: '#/components/parameters/InterviewIdPath'
+    post:
+      tags: [Reports]
+      summary: Retry report generation
+      description: >-
+        Retries summary generation on the existing report without recomputing
+        the interview score or creating a second report.
+      operationId: retryInterviewReport
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      responses:
+        '200':
+          description: Current report returned after retry or replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Java-issued access JWT with a 60-minute lifetime.
+  parameters:
+    RequestIdHeader:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Optional caller request ID; the service generates one when absent.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Stable key for this user and operation. Reuse with a different request
+        payload returns IDEMPOTENCY_KEY_REUSED.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+        pattern: '^[!-~]+$'
+    InterviewIdPath:
+      name: interviewId
+      in: path
+      required: true
+      description: Interview UUID.
+      schema:
+        type: string
+        format: uuid
+    PageQuery:
+      name: page
+      in: query
+      required: false
+      description: One-based page number.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSizeQuery:
+      name: page_size
+      in: query
+      required: false
+      description: Number of records per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    InterviewStatusQuery:
+      name: status
+      in: query
+      required: false
+      description: Optional interview status filter.
+      schema:
+        $ref: '#/components/schemas/InterviewStatus'
+  responses:
+    BadRequest:
+      description: Request syntax or framing is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication is missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: The authenticated user cannot access this resource.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: The requested resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Business state, uniqueness, or idempotency conflict.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Request fields fail semantic validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Request rate limit exceeded.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying when supplied.
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Unexpected business-service failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: AI capability is temporarily unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    GatewayTimeout:
+      description: AI capability did not complete before its operation timeout.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    LoginIdentifier:
+      type: string
+      minLength: 3
+      maxLength: 50
+      pattern: '^\S(?:.*\S)?$'
+      description: >-
+        Username-style identifier. Input is trimmed and uniqueness is checked
+        case-insensitively; V1 does not treat this as a verified email address.
+    Password:
+      type: string
+      minLength: 8
+      maxLength: 128
+      writeOnly: true
+    UserStatus:
+      type: string
+      enum: [ACTIVE, LOCKED]
+    InterviewStatus:
+      type: string
+      enum: [CREATED, IN_PROGRESS, COMPLETED, CANCELLED, FAILED]
+    Difficulty:
+      type: string
+      enum: [EASY, MEDIUM, HARD]
+    QuestionType:
+      type: string
+      enum: [CONCEPTUAL, PRACTICAL, SCENARIO, DESIGN]
+    QuestionProgressStatus:
+      type: string
+      description: Derived progress, not an InterviewSession state.
+      enum: [WAITING_FOR_ANSWER, EVALUATION_PENDING, EVALUATED]
+    ReportStatus:
+      type: string
+      enum: [PENDING, GENERATING, AVAILABLE, FAILED_RETRYABLE]
+    Score:
+      type: number
+      minimum: 0
+      maximum: 100
+      multipleOf: 0.01
+      description: Decimal score represented to at most two fractional digits.
+    ErrorCode:
+      type: string
+      enum:
+        - INVALID_REQUEST
+        - VALIDATION_FAILED
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - ILLEGAL_INTERVIEW_STATE
+        - INTERVIEW_NOT_READY
+        - INTERVIEW_NOT_COMPLETED
+        - DUPLICATE_SUBMISSION
+        - IDEMPOTENCY_KEY_REUSED
+        - OPERATION_IN_PROGRESS
+        - REPORT_NOT_READY
+        - AI_TIMEOUT
+        - LLM_TIMEOUT
+        - AI_SERVICE_UNAVAILABLE
+        - LLM_PROVIDER_ERROR
+        - RATE_LIMITED
+        - INVALID_AI_RESPONSE
+        - SCHEMA_VALIDATION_FAILED
+        - NETWORK_ERROR
+        - INTERNAL_ERROR
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, timestamp, details]
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+        details:
+          type: object
+          additionalProperties: true
+          description: Safe diagnostic details; secrets and stack traces are forbidden.
+      example:
+        code: ILLEGAL_INTERVIEW_STATE
+        message: The interview cannot accept an answer in its current state.
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:00:00Z'
+        details:
+          interview_id: 550e8400-e29b-41d4-a716-446655440000
+          current_status: COMPLETED
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [login_identifier, password]
+      properties:
+        login_identifier:
+          $ref: '#/components/schemas/LoginIdentifier'
+        password:
+          $ref: '#/components/schemas/Password'
+      example:
+        login_identifier: candidate01
+        password: secure-password
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [login_identifier, password]
+      properties:
+        login_identifier:
+          $ref: '#/components/schemas/LoginIdentifier'
+        password:
+          $ref: '#/components/schemas/Password'
+      example:
+        login_identifier: candidate01
+        password: secure-password
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, login_identifier, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        login_identifier:
+          $ref: '#/components/schemas/LoginIdentifier'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        created_at:
+          type: string
+          format: date-time
+      example:
+        id: 72a779e2-f8cf-47f0-9e7a-23b9c8a2a02f
+        login_identifier: candidate01
+        status: ACTIVE
+        created_at: '2026-10-04T12:00:00Z'
+    AuthenticatedUser:
+      type: object
+      additionalProperties: false
+      required: [id, login_identifier, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        login_identifier:
+          $ref: '#/components/schemas/LoginIdentifier'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+    UserResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          id: 72a779e2-f8cf-47f0-9e7a-23b9c8a2a02f
+          login_identifier: candidate01
+          status: ACTIVE
+          created_at: '2026-10-04T12:00:00Z'
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:00:00Z'
+    RegisterData:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+    RegisterResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/RegisterData'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          user:
+            id: 72a779e2-f8cf-47f0-9e7a-23b9c8a2a02f
+            login_identifier: candidate01
+            status: ACTIVE
+            created_at: '2026-10-04T12:00:00Z'
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:00:00Z'
+    LoginData:
+      type: object
+      additionalProperties: false
+      required: [access_token, token_type, expires_in, user]
+      properties:
+        access_token:
+          type: string
+          minLength: 1
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          enum: [3600]
+          description: Access-token lifetime in seconds.
+        user:
+          $ref: '#/components/schemas/AuthenticatedUser'
+    LoginResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginData'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          access_token: eyJhbGciOiJIUzI1NiJ9.example.signature
+          token_type: Bearer
+          expires_in: 3600
+          user:
+            id: 72a779e2-f8cf-47f0-9e7a-23b9c8a2a02f
+            login_identifier: candidate01
+            status: ACTIVE
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:00:00Z'
+    CreateInterviewRequest:
+      type: object
+      additionalProperties: false
+      required: [target_position, skills, difficulty]
+      properties:
+        target_position:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^\S(?:.*\S)?$'
+        skills:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          description: Skills are trimmed and deduplicated case-insensitively.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: '^\S(?:.*\S)?$'
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+          default: 5
+      example:
+        target_position: Java Backend Engineer
+        skills: [Java, Spring Boot, MySQL]
+        difficulty: MEDIUM
+        question_count: 5
+    Interview:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - target_position
+        - skills
+        - difficulty
+        - question_count
+        - status
+        - current_question_number
+        - interview_overall_score
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        target_position:
+          type: string
+          minLength: 1
+          maxLength: 100
+        skills:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+        status:
+          $ref: '#/components/schemas/InterviewStatus'
+        current_question_number:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 10
+        interview_overall_score:
+          anyOf:
+            - $ref: '#/components/schemas/Score'
+            - type: 'null'
+        created_at:
+          type: string
+          format: date-time
+    InterviewResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/Interview'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          id: 550e8400-e29b-41d4-a716-446655440000
+          target_position: Java Backend Engineer
+          skills: [Java, Spring Boot, MySQL]
+          difficulty: MEDIUM
+          question_count: 5
+          status: CREATED
+          current_question_number: null
+          interview_overall_score: null
+          created_at: '2026-10-04T12:00:00Z'
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:00:00Z'
+    InterviewListItem:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - target_position
+        - difficulty
+        - question_count
+        - status
+        - interview_overall_score
+        - created_at
+        - completed_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        target_position:
+          type: string
+          minLength: 1
+          maxLength: 100
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+        status:
+          $ref: '#/components/schemas/InterviewStatus'
+        interview_overall_score:
+          anyOf:
+            - $ref: '#/components/schemas/Score'
+            - type: 'null'
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: [string, 'null']
+          format: date-time
+    InterviewPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InterviewListItem'
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+    InterviewPageResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/InterviewPage'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          items:
+            - id: 550e8400-e29b-41d4-a716-446655440000
+              target_position: Java Backend Engineer
+              difficulty: MEDIUM
+              question_count: 5
+              status: COMPLETED
+              interview_overall_score: 82.50
+              created_at: '2026-10-04T12:00:00Z'
+              completed_at: '2026-10-04T12:15:00Z'
+          page: 1
+          page_size: 20
+          total: 1
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:20:00Z'
+    InterviewProgress:
+      type: object
+      additionalProperties: false
+      required: [completed_question_count, total_question_count]
+      properties:
+        completed_question_count:
+          type: integer
+          minimum: 0
+          maximum: 10
+        total_question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+    QuestionProgress:
+      type: object
+      additionalProperties: false
+      required: [id, question_number, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        question_number:
+          type: integer
+          minimum: 1
+          maximum: 10
+        status:
+          $ref: '#/components/schemas/QuestionProgressStatus'
+    InterviewDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - target_position
+        - skills
+        - difficulty
+        - question_count
+        - status
+        - current_question_number
+        - interview_overall_score
+        - progress
+        - questions
+        - created_at
+        - started_at
+        - completed_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        target_position:
+          type: string
+          minLength: 1
+          maxLength: 100
+        skills:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+        status:
+          $ref: '#/components/schemas/InterviewStatus'
+        current_question_number:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 10
+        interview_overall_score:
+          anyOf:
+            - $ref: '#/components/schemas/Score'
+            - type: 'null'
+        progress:
+          $ref: '#/components/schemas/InterviewProgress'
+        questions:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/QuestionProgress'
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: [string, 'null']
+          format: date-time
+        completed_at:
+          type: [string, 'null']
+          format: date-time
+    InterviewDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/InterviewDetail'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          id: 550e8400-e29b-41d4-a716-446655440000
+          target_position: Java Backend Engineer
+          skills: [Java, Spring Boot, MySQL]
+          difficulty: MEDIUM
+          question_count: 5
+          status: IN_PROGRESS
+          current_question_number: 2
+          interview_overall_score: null
+          progress:
+            completed_question_count: 1
+            total_question_count: 5
+          questions:
+            - id: 8f4d5da1-bfa4-4ae8-a818-9c53d1f58d36
+              question_number: 1
+              status: EVALUATED
+            - id: 4c6f223f-2823-43ed-a5c4-7692c650890d
+              question_number: 2
+              status: WAITING_FOR_ANSWER
+          created_at: '2026-10-04T12:00:00Z'
+          started_at: '2026-10-04T12:01:00Z'
+          completed_at: null
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:03:00Z'
+    PublicQuestion:
+      type: object
+      additionalProperties: false
+      required: [id, question_number, question, topic, difficulty, question_type]
+      properties:
+        id:
+          type: string
+          format: uuid
+        question_number:
+          type: integer
+          minimum: 1
+          maximum: 10
+        question:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        topic:
+          type: string
+          minLength: 1
+          maxLength: 200
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        question_type:
+          $ref: '#/components/schemas/QuestionType'
+    StartedInterview:
+      type: object
+      additionalProperties: false
+      required: [id, status, current_question_number]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [IN_PROGRESS]
+        current_question_number:
+          type: integer
+          minimum: 1
+          maximum: 10
+    StartInterviewData:
+      type: object
+      additionalProperties: false
+      required: [interview, current_question]
+      properties:
+        interview:
+          $ref: '#/components/schemas/StartedInterview'
+        current_question:
+          $ref: '#/components/schemas/PublicQuestion'
+    StartInterviewResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/StartInterviewData'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          interview:
+            id: 550e8400-e29b-41d4-a716-446655440000
+            status: IN_PROGRESS
+            current_question_number: 1
+          current_question:
+            id: 8f4d5da1-bfa4-4ae8-a818-9c53d1f58d36
+            question_number: 1
+            question: 请解释 Spring 事务传播行为的常见类型。
+            topic: Spring Transaction
+            difficulty: MEDIUM
+            question_type: CONCEPTUAL
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:01:00Z'
+    CurrentQuestionData:
+      description: >-
+        IN_PROGRESS returns a populated question. COMPLETED returns null for
+        question_number, question, and answer_status.
+      oneOf:
+        - $ref: '#/components/schemas/InProgressCurrentQuestionData'
+        - $ref: '#/components/schemas/CompletedCurrentQuestionData'
+      discriminator:
+        propertyName: interview_status
+        mapping:
+          IN_PROGRESS: '#/components/schemas/InProgressCurrentQuestionData'
+          COMPLETED: '#/components/schemas/CompletedCurrentQuestionData'
+    InProgressCurrentQuestionData:
+      type: object
+      additionalProperties: false
+      required:
+        - interview_id
+        - interview_status
+        - question_number
+        - total_question_count
+        - question
+        - answer_status
+      properties:
+        interview_id:
+          type: string
+          format: uuid
+        interview_status:
+          type: string
+          enum: [IN_PROGRESS]
+        question_number:
+          type: integer
+          minimum: 1
+          maximum: 10
+        total_question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+        question:
+          $ref: '#/components/schemas/CurrentQuestion'
+        answer_status:
+          $ref: '#/components/schemas/QuestionProgressStatus'
+    CompletedCurrentQuestionData:
+      type: object
+      additionalProperties: false
+      required:
+        - interview_id
+        - interview_status
+        - question_number
+        - total_question_count
+        - question
+        - answer_status
+      properties:
+        interview_id:
+          type: string
+          format: uuid
+        interview_status:
+          type: string
+          enum: [COMPLETED]
+        question_number:
+          type: 'null'
+        total_question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+        question:
+          type: 'null'
+        answer_status:
+          type: 'null'
+    CurrentQuestion:
+      type: object
+      additionalProperties: false
+      required: [id, question, topic, difficulty, question_type]
+      properties:
+        id:
+          type: string
+          format: uuid
+        question:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        topic:
+          type: string
+          minLength: 1
+          maxLength: 200
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        question_type:
+          $ref: '#/components/schemas/QuestionType'
+    CurrentQuestionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/CurrentQuestionData'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          interview_id: 550e8400-e29b-41d4-a716-446655440000
+          interview_status: IN_PROGRESS
+          question_number: 2
+          total_question_count: 5
+          question:
+            id: 4c6f223f-2823-43ed-a5c4-7692c650890d
+            question: 如何设计一个可靠的事务边界？
+            topic: Transaction
+            difficulty: MEDIUM
+            question_type: SCENARIO
+          answer_status: WAITING_FOR_ANSWER
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:04:00Z'
+    SubmitAnswerRequest:
+      type: object
+      additionalProperties: false
+      required: [question_id, answer_content]
+      properties:
+        question_id:
+          type: string
+          format: uuid
+        answer_content:
+          type: string
+          minLength: 1
+          maxLength: 8000
+          pattern: '^\s*\S[\s\S]*$'
+          description: Immutable candidate answer; whitespace-only input is invalid.
+      example:
+        question_id: 4c6f223f-2823-43ed-a5c4-7692c650890d
+        answer_content: 我会先确定事务的一致性边界，再处理重试和幂等。
+    AnswerReceipt:
+      type: object
+      additionalProperties: false
+      required: [id, question_id, submitted_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        question_id:
+          type: string
+          format: uuid
+        submitted_at:
+          type: string
+          format: date-time
+    PublicEvaluation:
+      type: object
+      additionalProperties: false
+      required:
+        - accuracy
+        - completeness
+        - depth
+        - clarity
+        - answer_overall_score
+        - strengths
+        - missing_points
+        - feedback
+      properties:
+        accuracy:
+          $ref: '#/components/schemas/Score'
+        completeness:
+          $ref: '#/components/schemas/Score'
+        depth:
+          $ref: '#/components/schemas/Score'
+        clarity:
+          $ref: '#/components/schemas/Score'
+        answer_overall_score:
+          allOf:
+            - $ref: '#/components/schemas/Score'
+          description: >-
+            Deterministically calculated by Java using 40/25/20/15 weights,
+            HALF_UP rounding, and two decimal places.
+        strengths:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1000
+        missing_points:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1000
+        feedback:
+          type: string
+          minLength: 1
+          maxLength: 4000
+    SubmitAnswerData:
+      description: >-
+        IN_PROGRESS returns one next_question and no report status. COMPLETED
+        returns a null next_question and the independently managed report status.
+      oneOf:
+        - $ref: '#/components/schemas/InProgressAnswerResult'
+        - $ref: '#/components/schemas/CompletedAnswerResult'
+      discriminator:
+        propertyName: interview_status
+        mapping:
+          IN_PROGRESS: '#/components/schemas/InProgressAnswerResult'
+          COMPLETED: '#/components/schemas/CompletedAnswerResult'
+    InProgressAnswerResult:
+      type: object
+      additionalProperties: false
+      required: [answer, evaluation, next_question, interview_status]
+      properties:
+        answer:
+          $ref: '#/components/schemas/AnswerReceipt'
+        evaluation:
+          $ref: '#/components/schemas/PublicEvaluation'
+        next_question:
+          $ref: '#/components/schemas/PublicQuestion'
+        interview_status:
+          type: string
+          enum: [IN_PROGRESS]
+    CompletedAnswerResult:
+      type: object
+      additionalProperties: false
+      required: [answer, evaluation, next_question, interview_status, report_status]
+      properties:
+        answer:
+          $ref: '#/components/schemas/AnswerReceipt'
+        evaluation:
+          $ref: '#/components/schemas/PublicEvaluation'
+        next_question:
+          type: 'null'
+        interview_status:
+          type: string
+          enum: [COMPLETED]
+        report_status:
+          $ref: '#/components/schemas/ReportStatus'
+    SubmitAnswerResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/SubmitAnswerData'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          answer:
+            id: 149de8a1-2961-462c-bfe2-b3e92bfba266
+            question_id: 4c6f223f-2823-43ed-a5c4-7692c650890d
+            submitted_at: '2026-10-04T12:05:00Z'
+          evaluation:
+            accuracy: 85.00
+            completeness: 80.00
+            depth: 78.00
+            clarity: 88.00
+            answer_overall_score: 82.55
+            strengths: [明确说明了核心概念]
+            missing_points: [缺少边界条件分析]
+            feedback: 建议补充具体场景。
+          next_question:
+            id: cbf6503a-0024-43a4-9f75-312c54672d46
+            question_number: 3
+            question: 如何保证重复请求不会创建重复数据？
+            topic: Idempotency
+            difficulty: MEDIUM
+            question_type: PRACTICAL
+          interview_status: IN_PROGRESS
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:05:05Z'
+    CancelInterviewData:
+      type: object
+      additionalProperties: false
+      required: [id, status, cancelled_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [CANCELLED]
+        cancelled_at:
+          type: string
+          format: date-time
+    CancelInterviewResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/CancelInterviewData'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          id: 550e8400-e29b-41d4-a716-446655440000
+          status: CANCELLED
+          cancelled_at: '2026-10-04T12:10:00Z'
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:10:00Z'
+    Report:
+      description: >-
+        Deterministic metrics are always populated after completion. Summary
+        fields and published_at are null until report_status is AVAILABLE.
+      oneOf:
+        - $ref: '#/components/schemas/PendingReport'
+        - $ref: '#/components/schemas/AvailableReport'
+      discriminator:
+        propertyName: report_status
+        mapping:
+          PENDING: '#/components/schemas/PendingReport'
+          GENERATING: '#/components/schemas/PendingReport'
+          FAILED_RETRYABLE: '#/components/schemas/PendingReport'
+          AVAILABLE: '#/components/schemas/AvailableReport'
+    PendingReport:
+      type: object
+      additionalProperties: false
+      required:
+        - interview_id
+        - report_status
+        - interview_overall_score
+        - question_count
+        - completed_question_count
+        - average_accuracy
+        - average_completeness
+        - average_depth
+        - average_clarity
+        - duration_seconds
+        - strength_summary
+        - weakness_summary
+        - improvement_suggestions
+        - overall_comment
+        - published_at
+      properties:
+        interview_id:
+          type: string
+          format: uuid
+        report_status:
+          type: string
+          enum: [PENDING, GENERATING, FAILED_RETRYABLE]
+        interview_overall_score:
+          $ref: '#/components/schemas/Score'
+        question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+        completed_question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+        average_accuracy:
+          $ref: '#/components/schemas/Score'
+        average_completeness:
+          $ref: '#/components/schemas/Score'
+        average_depth:
+          $ref: '#/components/schemas/Score'
+        average_clarity:
+          $ref: '#/components/schemas/Score'
+        duration_seconds:
+          type: integer
+          minimum: 0
+        strength_summary:
+          type: 'null'
+        weakness_summary:
+          type: 'null'
+        improvement_suggestions:
+          type: 'null'
+        overall_comment:
+          type: 'null'
+        published_at:
+          type: 'null'
+    AvailableReport:
+      type: object
+      additionalProperties: false
+      required:
+        - interview_id
+        - report_status
+        - interview_overall_score
+        - question_count
+        - completed_question_count
+        - average_accuracy
+        - average_completeness
+        - average_depth
+        - average_clarity
+        - duration_seconds
+        - strength_summary
+        - weakness_summary
+        - improvement_suggestions
+        - overall_comment
+        - published_at
+      properties:
+        interview_id:
+          type: string
+          format: uuid
+        report_status:
+          type: string
+          enum: [AVAILABLE]
+        interview_overall_score:
+          $ref: '#/components/schemas/Score'
+        question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+        completed_question_count:
+          type: integer
+          minimum: 3
+          maximum: 10
+        average_accuracy:
+          $ref: '#/components/schemas/Score'
+        average_completeness:
+          $ref: '#/components/schemas/Score'
+        average_depth:
+          $ref: '#/components/schemas/Score'
+        average_clarity:
+          $ref: '#/components/schemas/Score'
+        duration_seconds:
+          type: integer
+          minimum: 0
+        strength_summary:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        weakness_summary:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        improvement_suggestions:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1000
+        overall_comment:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        published_at:
+          type: string
+          format: date-time
+    ReportResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id, timestamp]
+      properties:
+        data:
+          $ref: '#/components/schemas/Report'
+        request_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        data:
+          interview_id: 550e8400-e29b-41d4-a716-446655440000
+          report_status: AVAILABLE
+          interview_overall_score: 82.50
+          question_count: 5
+          completed_question_count: 5
+          average_accuracy: 84.20
+          average_completeness: 79.80
+          average_depth: 81.00
+          average_clarity: 85.50
+          duration_seconds: 900
+          strength_summary: 候选人在核心概念和表达方面表现较好。
+          weakness_summary: 对边界条件和系统设计细节掌握不足。
+          improvement_suggestions: [加强事务边界分析, 练习系统设计类问题]
+          overall_comment: 整体具备较好的后端基础。
+          published_at: '2026-10-04T12:20:00Z'
+        request_id: req_01K6D6Y28N4C9M7Y5P3A2F8R1Q
+        timestamp: '2026-10-04T12:20:00Z'

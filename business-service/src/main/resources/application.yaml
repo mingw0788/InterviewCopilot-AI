@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: interviewcopilot-business-service
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:interviewcopilot}
+    username: ${MYSQL_USER:interviewcopilot}
+    password: ${MYSQL_PASSWORD}
+  sql:
+    init:
+      mode: never
+  flyway:
+    validate-migration-naming: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+server:
+  port: ${BUSINESS_SERVICE_PORT:8080}
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+interviewcopilot:
+  security:
+    jwt:
+      issuer: https://interviewcopilot.local/business-service
+      signing-secret: ${JWT_SIGNING_SECRET}
+      access-token-ttl: 60m
+  ai-service:
+    base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
+    service-token: ${INTERNAL_AI_SERVICE_TOKEN}
+    connect-timeout: ${AI_SERVICE_CONNECT_TIMEOUT:2s}
+    read-timeout: ${AI_SERVICE_READ_TIMEOUT:5s}

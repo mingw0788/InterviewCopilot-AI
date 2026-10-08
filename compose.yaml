@@ -1,0 +1,128 @@
+name: interviewcopilot
+
+services:
+  mysql:
+    image: mysql:8.4.11
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-interviewcopilot}
+      MYSQL_USER: ${MYSQL_USER:-interviewcopilot}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    expose:
+      - "3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD
+        - mysqladmin
+        - ping
+        - --host=127.0.0.1
+        - --silent
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - data
+
+  ai-service:
+    build:
+      context: ./ai-service
+    restart: unless-stopped
+    environment:
+      AI_SERVICE_HOST: 0.0.0.0
+      AI_SERVICE_PORT: "8000"
+      AI_PROVIDER: ${AI_PROVIDER:?Set AI_PROVIDER=mock in .env}
+      INTERNAL_AI_SERVICE_TOKEN: ${INTERNAL_AI_SERVICE_TOKEN:?Set INTERNAL_AI_SERVICE_TOKEN in .env}
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks:
+      - service
+
+  business-service:
+    build:
+      context: ./business-service
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      BUSINESS_SERVICE_PORT: "8080"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-interviewcopilot}
+      MYSQL_USER: ${MYSQL_USER:-interviewcopilot}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      AI_SERVICE_BASE_URL: http://ai-service:8000
+      INTERNAL_AI_SERVICE_TOKEN: ${INTERNAL_AI_SERVICE_TOKEN:?Set INTERNAL_AI_SERVICE_TOKEN in .env}
+      JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET:?Set JWT_SIGNING_SECRET in .env}
+      AI_SERVICE_CONNECT_TIMEOUT: ${AI_SERVICE_CONNECT_TIMEOUT:-2s}
+      AI_SERVICE_READ_TIMEOUT: ${AI_SERVICE_READ_TIMEOUT:-5s}
+    ports:
+      - 127.0.0.1:${BUSINESS_SERVICE_PORT:-8080}:8080
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - http://127.0.0.1:8080/actuator/health/readiness
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+    networks:
+      - edge
+      - service
+      - data
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      business-service:
+        condition: service_healthy
+    environment:
+      VITE_BUSINESS_API_BASE_URL: http://localhost:${BUSINESS_SERVICE_PORT:-8080}
+    ports:
+      - 127.0.0.1:${FRONTEND_PORT:-5173}:5173
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:5173').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks:
+      - edge
+
+volumes:
+  mysql-data:
+
+networks:
+  edge:
+  service:
+  data:
+    internal: true

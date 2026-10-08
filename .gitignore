@@ -1,0 +1,34 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDEs and operating systems
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Java
+**/target/
+*.log
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/.coverage
+**/*.egg-info/
+
+# Frontend
+**/node_modules/
+**/dist/
+**/.vite/
+**/coverage/
+
+# Local tooling
+.tmp/

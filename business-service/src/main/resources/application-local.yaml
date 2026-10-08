@@ -1,0 +1,3 @@
+spring:
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:interviewcopilot}?sslMode=DISABLED&allowPublicKeyRetrieval=true&serverTimezone=UTC

@@ -1,0 +1,1 @@
+"""Internal AI API routes."""
